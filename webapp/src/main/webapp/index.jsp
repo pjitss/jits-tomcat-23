@@ -1,3 +1,3 @@
-<h1> Hello, Welcome to Simple DevOps Project !!   </h1>
-<h2> Deploying on a kubernetes using ansible for Valaxy Technologies </h2>
-<h2> Glad to see you here </h2>
+<h1> Hello Prajeet, How are you   </h1>
+<h2> Welcome to our company in Abu Dhabi </h2>
+<h2> Glad to see you here, we offer you 35k per month </h2>

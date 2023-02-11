@@ -1,7 +1,5 @@
-# Pull base image 
-From tomcat:8-jre8
-
-# Maintainer 
-MAINTAINER "valaxytech@gmail.com" 
-COPY ./webapp.war /usr/local/tomcat/webapps
+FROM centos
+MAINTAINER Prajeet
+RUN yum update -y
+CMD ["/bin/bash"]
 

@@ -1,44 +1,47 @@
+def MYWARS
 pipeline {
     agent any
+        tools{
+      maven "mymaven3"
+        }
+
     environment {
-        PATH = "/opt/maven/apache-maven-3.8.7/bin:$PATH"
+        // This can be nexus3 or nexus2
         NEXUS_VERSION = "nexus3"
+        // This can be http or https
         NEXUS_PROTOCOL = "http"
-        NEXUS_URL = "192.168.0.193:8081"
-        NEXUS_REPOSITORY = "jitsNex-release"
-        NEXUS_REPO_ID = "jitsNex-release"
-        NEXUS_CREDENTIAL_ID = "nexus_cred"
-        ARTVERSION = "${env.BUILD_ID}"
+        // Where your Nexus is running. 'nexus-3' is defined in the docker-compose file
+        NEXUS_URL = "192.168.1.34:8081"
+        // Repository where we will upload the artifact
+        NEXUS_REPOSITORY = "maven-repository"
+        // Jenkins credential id to authenticate to Nexus OSS
+        NEXUS_CREDENTIAL_ID = "nx"
+
     }
-    stages {
-        stage("hello"){
+        stages {
+        stage('Checkout source code') {
             steps{
-                echo "hello prajeet, welcome to AbuDhabi"
+              echo 'Hello World'
+              checkout([$class: 'GitSCM', branches: [[name: '*/master']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/pjitss/xgn.git']]])
+                          sh 'wars=`grep -A 2 jits /var/lib/jenkins/workspace/jenkinsvar2/pom.xml | grep version | cut -d "<"  -f2 | cut -d ">" -f2`'
+                          sh "mvn -Dmaven.test.failure.ignore=true clean package"
             }
         }
-        stage("git clone"){
-            steps{
-                git branch: 'main', credentialsId: 'cda3ca04-162b-4e6d-a78b-70626d319515', url: 'https://github.com/pjitss/jits-tomcat-23.git'
-            }
+        stage('SonarQube Analysis') {
+          steps{
+              withSonarQubeEnv(installationName: 'sonarqube') {
+                sh "mvn -e clean install sonar:sonar"
+              }
+          }
         }
-        stage("maven clean"){
-            steps{
-                sh "mvn clean"
+        stage("Quality Gate") {
+            steps {
+              timeout(time: 1, unit: 'HOURS') {
+                waitForQualityGate abortPipeline: true
+              }
             }
-        }
-        stage("maven install"){
-            steps{
-                sh "mvn clean install"
-            }
-        }
-        stage('Sonar Scan'){
-            steps{
-                withSonarQubeEnv('SonarServer') {
-                sh "mvn sonar:sonar"
-                }
-            }
-        }
-        stage('Publish') {
+          }
+                stage('Publish') {
             steps {
                 script {
                     // Read POM xml file using 'readMavenPom' step , this step 'readMavenPom' is included in: https://plugins.jenkins.io/pipeline-utility-steps
@@ -84,17 +87,23 @@ pipeline {
                 }
             }
         }
-        stage("login & deploy"){
-            steps{
-                sshagent(['JenkinLogin']) {
-                    sh 'ssh -o StrictHostKeyChecking=no root@192.168.0.233 uname -a'
-                    sh 'whoami'
-                    sh 'hostname'
-                    sh "pwd"
-                    sh "ls -ltra"
-                    sh "scp -o StrictHostKeyChecking=no webapp/target/webapp.war root@192.168.0.233:/opt/tomcat/latest/webapps"
-                }
-                        
+        stage("deploy to uat") {
+            agent { label 'myuats' }
+            steps {
+                sh 'whoami'
+                sh 'wget --user=admin --password=redhat http://192.168.1.34:8081/repository/maven-repository/com/example/jits/1.0.11/jits-1.0.11.war'
+                sh 'mv /artifactory/workspace/jenkinsvar2/*.11.war myuats.war'
+                sh 'cp /artifactory/workspace/jenkinsvar2/myuats.war /opt/tomcat/apache-tomcat-9.0.63/webapps/'
+            }
+        }
+        stage("deploy to prod") {
+            agent { label 'myprods' }
+            steps {
+            input 'Do you want to proceed this in Prod'
+            sh "whoami"
+            sh 'wget --user=admin --password=redhat http://192.168.1.34:8081/repository/maven-repository/com/example/jits/1.0.11/jits-1.0.11.war'
+            sh 'mv /artifactory/workspace/jenkinsvar2/*.11.war myprods.war'
+            sh 'cp /artifactory/workspace/jenkinsvar2/myprods.war /opt/tomcat/apache-tomcat-9.0.63/webapps/'
             }
         }
     }
